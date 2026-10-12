@@ -1,4 +1,4 @@
-﻿const { contextBridge, ipcRenderer, webUtils } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('bento', {
   home: () => ipcRenderer.invoke('home'),
   minimize: () => ipcRenderer.invoke('window-minimize'),
@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('bento', {
   listDirectory: p => ipcRenderer.invoke('list-directory', p),
   openPath: p => ipcRenderer.invoke('open-path', p),
   openArchive: p => ipcRenderer.invoke('open-archive', p),
+  onArchiveProgress: callback => { const listener = (_event, data) => callback(data); ipcRenderer.on('archive-progress', listener); return () => ipcRenderer.removeListener('archive-progress', listener); },
   fileUrl: p => ipcRenderer.invoke('file-url', p),
   revealPath: p => ipcRenderer.invoke('reveal-path', p),
   chooseFolder: () => ipcRenderer.invoke('choose-folder'),
