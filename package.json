@@ -1,0 +1,26 @@
+{
+  "name": "bento-explorer",
+  "version": "0.1.0",
+  "description": "A modern, keyboard-friendly Windows file manager.",
+  "main": "src/main.cjs",
+  "author": "Local",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron .",
+    "dist": "electron-builder --win nsis",
+    "check": "node --check src/main.cjs && node --check src/preload.cjs && node --check src/renderer.js && node --check src/enhanced.js"
+  },
+  "devDependencies": {
+    "electron": "^38.2.0",
+    "electron-builder": "^26.2.0"
+  },
+  "build": {
+    "appId": "dev.bentuexplorer.app",
+    "productName": "Bento Explorer",
+    "directories": { "output": "release" },
+    "files": ["src/**/*", "package.json"],
+    "win": { "target": "nsis" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true }
+  }
+}

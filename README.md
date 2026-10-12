@@ -49,4 +49,4 @@ File operations run locally through Electron's isolated main process. Delete use
 
 ## Design references
 
-The UI system was prepared with the open-source [UI/UX Pro Max skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill). A copy of the skill and generated design tokens are included for future iterations.
+The design workflow used the open-source [UI/UX Pro Max skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill). The Bento-specific design tokens are in design-system/bento-explorer/MASTER.md.
