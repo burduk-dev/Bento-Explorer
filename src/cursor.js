@@ -39,7 +39,16 @@
   cursor.innerHTML = '<span class="cursor-ring"></span><span class="cursor-dot"></span>';
   document.body.appendChild(cursor);
   document.body.classList.add('bento-cursor-on');
-
+  // Restore the native cursor while a modal is in the browser's top layer.
+  const nativeShowModal = HTMLDialogElement.prototype.showModal;
+  HTMLDialogElement.prototype.showModal = function(...args) {
+    document.body.classList.remove('bento-cursor-on');
+    cursor.classList.remove('is-visible');
+    return nativeShowModal.apply(this, args);
+  };
+  document.addEventListener('close', () => {
+    if (!document.querySelector('dialog[open]')) document.body.classList.add('bento-cursor-on');
+  }, true);
   const dot = cursor.querySelector('.cursor-dot');
   const ring = cursor.querySelector('.cursor-ring');
   let x = -100, y = -100, rx = x, ry = y, raf = 0;
