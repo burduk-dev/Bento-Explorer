@@ -5,10 +5,10 @@ function renderTabs(){
  const host=$('#tabs');if(!host)return;
  host.innerHTML=state.tabs.map(t=>'<div class="tab '+(t.id===state.activeTabId?'active':'')+'" data-tab="'+t.id+'" title="'+esc(t.path)+'"><span class="tab-icon">'+icon(t.mode==='tag'?'tag':t.mode==='home'?'home':'folder')+'</span><span class="tab-label">'+esc(t.label||'Новая вкладка')+'</span><button class="tab-close" data-close-tab="'+t.id+'" title="Закрыть вкладку">×</button></div>').join('');
 }
-function createTab(path=state.path,mode=state.mode){
+function createTab(path=state.path,mode=state.mode,activate=true){
  const id=state.nextTabId++;const safeMode=mode==='tag'?'tag':mode==='home'?'home':'folder';
  const target=safeMode==='tag'?'tag://'+encodeURIComponent(state.currentTag):(path||state.path||'');
- state.tabs.push({id,path:target,mode:safeMode,label:safeMode==='tag'?'# '+state.currentTag:safeMode==='home'?'Главная':basename(target)});state.activeTabId=id;persistTabs();renderTabs();navigate(target||state.path,{replace:true,mode:safeMode,tabSwitch:true});
+ state.tabs.push({id,path:target,mode:safeMode,label:safeMode==='tag'?'# '+state.currentTag:safeMode==='home'?'Главная':basename(target)});persistTabs();if(activate){state.activeTabId=id;renderTabs();navigate(target||state.path,{replace:true,mode:safeMode,tabSwitch:true});}else renderTabs();
 }
 function safeTabPath(){return state.path&&!state.path.startsWith('tag://')?state.path:state.special.find(s=>s.name==='Desktop')?.path||state.path;}
 function closeTab(id){
@@ -50,19 +50,48 @@ function setupDragDrop(){
  attachDropZone(left,e=>{const card=e.target.closest('[data-item]');const item=card&&state.items.find(i=>i.path===card.dataset.item);return item?.isDirectory?item.path:state.path;});
  attachDropZone(right,e=>{const card=e.target.closest('[data-right-item]');const item=card&&state.rightItems.find(i=>i.path===card.dataset.rightItem);return item?.isDirectory?item.path:state.rightPath;});
 }
+function switchTabByOffset(offset){
+ const index=state.tabs.findIndex(t=>t.id===state.activeTabId);if(index<0||state.tabs.length<2)return;
+ const next=(index+offset+state.tabs.length)%state.tabs.length;const tab=state.tabs[next];state.activeTabId=tab.id;persistTabs();renderTabs();navigate(tab.path,{replace:true,mode:tab.mode,tabSwitch:true});
+}
 function setupGestures(){
+ let points=[],trail=null,trailPath=null,trailDot=null;
+ const ensureTrail=()=>{if(trail)return;trail=document.createElementNS('http://www.w3.org/2000/svg','svg');trail.id='gesture-trail';trail.setAttribute('viewBox','0 0 100 100');trail.setAttribute('preserveAspectRatio','none');trail.innerHTML='<polyline class="gesture-trail-line" points=""></polyline><circle class="gesture-trail-dot" cx="0" cy="0" r="4"></circle>';document.body.appendChild(trail);trailPath=trail.querySelector('polyline');trailDot=trail.querySelector('circle');};
+ const drawTrail=()=>{if(!trail||!points.length)return;trail.setAttribute('viewBox','0 0 '+innerWidth+' '+innerHeight);trailPath.setAttribute('points',points.map(p=>p.x+','+p.y).join(' '));const p=points[points.length-1];trailDot.setAttribute('cx',p.x);trailDot.setAttribute('cy',p.y);};
+ const showTrail=()=>{ensureTrail();trail.classList.add('visible');drawTrail();};
+ const clearTrail=()=>{trail?.classList.remove('visible');points=[];if(trailPath)trailPath.setAttribute('points','');};
  document.addEventListener('mousedown',e=>{
-  if(e.button===2){if(state.leftDown){state.gesture={kind:'rock',direction:'forward'};state.rightDown=true;state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);$('#forward').click();e.preventDefault();return;}state.rightDown=true;state.gesture={kind:'right',x:e.clientX,y:e.clientY};}
-  if(e.button===0){state.leftDown=true;if(state.rightDown){state.gesture={kind:'rock',direction:'back'};state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);$('#back').click();e.preventDefault();}}
+  if(e.button===2){
+   if(state.leftDown){state.gesture={kind:'rock',direction:'forward'};state.rightDown=true;state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);switchTabByOffset(1);e.preventDefault();return;}
+   state.rightDown=true;state.gesture={kind:'right',x:e.clientX,y:e.clientY};points=[{x:e.clientX,y:e.clientY}];showTrail();
+  }
+  if(e.button===0){state.leftDown=true;if(state.rightDown){state.gesture={kind:'rock',direction:'back'};state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);switchTabByOffset(-1);e.preventDefault();}}
+ });
+ document.addEventListener('mousemove',e=>{
+  const g=state.gesture;if(!state.rightDown||g?.kind!=='right')return;
+  const p=points[points.length-1];if(!p||Math.hypot(e.clientX-p.x,e.clientY-p.y)>=4){points.push({x:e.clientX,y:e.clientY});showTrail();}
+  const dx=e.clientX-g.x,dy=e.clientY-g.y;const hint=$('#gesture-hint');
+  hint.textContent=Math.hypot(dx,dy)<20?'Рисуй жест…':Math.abs(dx)>Math.abs(dy)?(dx<0?'← Назад':'Вперёд →'):(dy<0?'↑ На уровень выше':'↓ Обновить');
+  hint.classList.remove('hidden');drawTrail();
  });
  document.addEventListener('mouseup',e=>{
   if(e.button===0)state.leftDown=false;if(e.button!==2)return;state.rightDown=false;const g=state.gesture;state.gesture=null;
-  if(g?.kind==='rock'){state.rockingHandled=true;return;}if(g?.kind!=='right')return;const dx=e.clientX-g.x,dy=e.clientY-g.y;if(Math.hypot(dx,dy)<55)return;
-  state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);const hint=$('#gesture-hint');if(Math.abs(dx)>Math.abs(dy)){if(dx<0)$('#back').click();else $('#forward').click();hint.textContent=dx<0?'← Назад':'Вперёд →';}else if(dy<0){$('#up').click();hint.textContent='↑ На уровень выше';}else{navigate(state.path,{replace:true,mode:state.mode});hint.textContent='↓ Обновить';}
-  hint.classList.remove('hidden');clearTimeout(hint.timer);hint.timer=setTimeout(()=>hint.classList.add('hidden'),900);
+  if(g?.kind==='rock'){state.rockingHandled=true;return;}if(g?.kind!=='right')return;
+  const dx=e.clientX-g.x,dy=e.clientY-g.y;
+  if(Math.hypot(dx,dy)>=55){state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);if(Math.abs(dx)>Math.abs(dy)){if(dx<0)$('#back').click();else $('#forward').click();}else if(dy<0)$('#up').click();else navigate(state.path,{replace:true,mode:state.mode});}
+  const hint=$('#gesture-hint');if(Math.hypot(dx,dy)<55)hint.classList.add('hidden');
+  clearTimeout(hint.timer);hint.timer=setTimeout(()=>{hint.classList.add('hidden');clearTrail();},900);
  });
  document.addEventListener('contextmenu',e=>{if(state.rockingHandled){e.preventDefault();state.rockingHandled=false;}});
 }
+document.addEventListener('auxclick',e=>{
+ if(e.button!==1)return;
+ const card=e.target.closest('[data-item],[data-right-item]');if(!card)return;
+ const path=card.dataset.item||card.dataset.rightItem;
+ const item=(card.hasAttribute('data-right-item')?state.rightItems:state.items).find(i=>i.path===path);
+ if(!item?.isDirectory)return;
+ e.preventDefault();createTab(item.path,'folder',!!e.shiftKey);
+});
 $('#new-tab')?.addEventListener('click',()=>createTab());
 $('#tabs')?.addEventListener('click',e=>{
  const close=e.target.closest('[data-close-tab]');if(close){e.stopPropagation();closeTab(Number(close.dataset.closeTab));return;}

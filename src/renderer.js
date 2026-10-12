@@ -41,6 +41,7 @@ const iconPaths = {
  check:'<path d="m5 12 4 4L19 6"/>',
  x:'<path d="m18 6-12 12M6 6l12 12"/>',
  columns:'<rect x="3" y="4" width="8" height="16" rx="2"/><rect x="13" y="4" width="8" height="16" rx="2"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>',
  tag:'<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.2"/>',
 };
 function icon(name, cls='') { return '<svg class="icon '+cls+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(iconPaths[name]||iconPaths.file)+'</svg>'; }
@@ -109,6 +110,8 @@ function renderFiles(){
  }else{
  area.innerHTML=items.map(item=>'<article class="file-card '+(state.selected.has(item.path)?'is-selected':'')+'" data-item="'+esc(item.path)+'" draggable="true" tabindex="0"><div class="card-top"><span class="file-type '+colorFor(item)+'">'+icon(iconFor(item))+'</span><button class="icon-button card-more" data-more="'+esc(item.path)+'" title="Действия">'+icon('more')+'</button></div><div class="file-name" title="'+esc(item.name)+'">'+esc(item.name)+'</div><div class="file-meta"><span>'+(item.isDirectory?'Папка':(item.extension||'Файл').replace('.','').toUpperCase())+'</span><span>'+(item.isDirectory?'':formatSize(item.size))+'</span></div><div class="card-footer"><span>'+formatDate(item.modified)+'</span><span class="mini-dot"></span></div>'+(item.tags&&item.tags.length?'<div class="tag-chips">'+item.tags.map(t=>'<span class="tag-chip">#'+esc(t)+'</span>').join('')+'</div>':'')+'</article>').join('');
  }
+ area.querySelectorAll('[data-item]').forEach(el=>{const item=state.items.find(i=>i.path===el.dataset.item);if(!item?.isDirectory)return;const host=el.querySelector('.card-top')||el;const actions=document.createElement('div');actions.className='item-quick-actions';actions.innerHTML='<button type="button" class="icon-button" data-item-action="open" title="Открыть сейчас">'+icon('external')+'</button><button type="button" class="icon-button" data-item-action="tab" title="Открыть в новой вкладке">'+icon('plus')+'</button>';host.appendChild(actions);});
+ $('#statusbar').classList.toggle('has-selection',state.selected.size>0);
  $('#status-text').textContent=items.length+' элементов · '+state.selected.size+' выбрано';$('#status-path').textContent=state.path;
 }
 function renderStatus(){renderFiles();}
@@ -168,7 +171,8 @@ document.addEventListener('click',e=>{
  const nav=e.target.closest('.nav-item[data-path]');if(nav){navigate(nav.dataset.path);return;}
  const more=e.target.closest('[data-more]');if(more){e.stopPropagation();const item=state.items.find(i=>i.path===more.dataset.more)||{path:more.dataset.more,name:basename(more.dataset.more),isDirectory:false,kind:'file',size:0,modified:Date.now()};showContext(item,more.getBoundingClientRect().left,more.getBoundingClientRect().bottom);return;}
  const action=e.target.closest('[data-action]');if(action){handleAction(action.dataset.action);return;}
- const card=e.target.closest('[data-item]');if(card){const item=state.items.find(i=>i.path===card.dataset.item)||{path:card.dataset.item,name:basename(card.dataset.item),isDirectory:false,kind:'file',size:0,modified:Date.now()};const now=Date.now();if(state.lastClick&&state.lastClick.path===item.path&&now-state.lastClick.time<420){state.lastClick=null;openItem(item);}else{state.lastClick={path:item.path,time:now};selectItem(item.path,e.ctrlKey||e.metaKey||e.shiftKey);}return;}
+ const quick=e.target.closest('[data-item-action]');if(quick){e.preventDefault();e.stopPropagation();const card=quick.closest('[data-item]');const item=card&&state.items.find(i=>i.path===card.dataset.item);if(item){if(quick.dataset.itemAction==='tab')createTab(item.path,'folder',true);else openItem(item);}return;}
+ const card=e.target.closest('[data-item]');if(card){const item=state.items.find(i=>i.path===card.dataset.item)||{path:card.dataset.item,name:basename(card.dataset.item),isDirectory:false,kind:'file',size:0,modified:Date.now()};if(e.shiftKey){state.lastClick=null;openItem(item);return;}const now=Date.now();if(state.lastClick&&state.lastClick.path===item.path&&now-state.lastClick.time<420){state.lastClick=null;openItem(item);}else{state.lastClick={path:item.path,time:now};selectItem(item.path,e.ctrlKey||e.metaKey);}return;}
  if(!e.target.closest('#context-menu'))hideContext();
 });
 
