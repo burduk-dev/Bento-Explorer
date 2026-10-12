@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('bento', {
   home: () => ipcRenderer.invoke('home'),
   minimize: () => ipcRenderer.invoke('window-minimize'),
@@ -18,5 +18,6 @@ contextBridge.exposeInMainWorld('bento', {
   getTags: () => ipcRenderer.invoke('get-tags'),
   createTag: name => ipcRenderer.invoke('create-tag', name),
   setTags: (p, tags) => ipcRenderer.invoke('set-tags', p, tags),
-  listTagged: tag => ipcRenderer.invoke('list-tagged', tag)
+  listTagged: tag => ipcRenderer.invoke('list-tagged', tag),
+  getDroppedPath: file => webUtils.getPathForFile(file)
 });

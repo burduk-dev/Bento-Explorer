@@ -42,7 +42,7 @@ function attachDropZone(el,getDestination){
  if(!el)return;
  el.addEventListener('dragover',e=>{if(state.draggedPaths.length||e.dataTransfer?.types.includes('application/x-bento-paths')){e.preventDefault();e.dataTransfer.dropEffect=e.ctrlKey?'copy':'move';el.classList.add('drop-target');}});
  el.addEventListener('dragleave',e=>{if(!el.contains(e.relatedTarget))el.classList.remove('drop-target');});
- el.addEventListener('drop',async e=>{e.preventDefault();el.classList.remove('drop-target');const target=getDestination(e);if(!target)return;const paths=state.draggedPaths.length?state.draggedPaths:JSON.parse(e.dataTransfer.getData('application/x-bento-paths')||'[]');if(!paths.length)return;state.draggedPaths=paths;await dropFiles(target,e.ctrlKey);});
+ el.addEventListener('drop',async e=>{e.preventDefault();el.classList.remove('drop-target');const target=getDestination(e);if(!target)return;let paths=state.draggedPaths.length?state.draggedPaths:JSON.parse(e.dataTransfer.getData('application/x-bento-paths')||'[]');let external=false;if(!paths.length&&e.dataTransfer.files?.length){paths=Array.from(e.dataTransfer.files).map(file=>{try{return window.bento.getDroppedPath(file);}catch{return '';}}).filter(Boolean);external=paths.length>0;}if(!paths.length)return;state.draggedPaths=paths;await dropFiles(target,external||e.ctrlKey);});
 }
 function setupDragDrop(){
  const left=$('#file-area'),right=$('#file-area-right');
@@ -52,13 +52,13 @@ function setupDragDrop(){
 }
 function setupGestures(){
  document.addEventListener('mousedown',e=>{
-  if(e.button===2){if(state.leftDown){state.gesture={kind:'rock',direction:'forward'};state.rightDown=true;state.rockingHandled=true;$('#forward').click();e.preventDefault();return;}state.rightDown=true;state.gesture={kind:'right',x:e.clientX,y:e.clientY};}
-  if(e.button===0){state.leftDown=true;if(state.rightDown){state.gesture={kind:'rock',direction:'back'};state.rockingHandled=true;$('#back').click();e.preventDefault();}}
+  if(e.button===2){if(state.leftDown){state.gesture={kind:'rock',direction:'forward'};state.rightDown=true;state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);$('#forward').click();e.preventDefault();return;}state.rightDown=true;state.gesture={kind:'right',x:e.clientX,y:e.clientY};}
+  if(e.button===0){state.leftDown=true;if(state.rightDown){state.gesture={kind:'rock',direction:'back'};state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);$('#back').click();e.preventDefault();}}
  });
  document.addEventListener('mouseup',e=>{
   if(e.button===0)state.leftDown=false;if(e.button!==2)return;state.rightDown=false;const g=state.gesture;state.gesture=null;
   if(g?.kind==='rock'){state.rockingHandled=true;return;}if(g?.kind!=='right')return;const dx=e.clientX-g.x,dy=e.clientY-g.y;if(Math.hypot(dx,dy)<55)return;
-  state.rockingHandled=true;const hint=$('#gesture-hint');if(Math.abs(dx)>Math.abs(dy)){if(dx<0)$('#back').click();else $('#forward').click();hint.textContent=dx<0?'← Назад':'Вперёд →';}else if(dy<0){$('#up').click();hint.textContent='↑ На уровень выше';}else{navigate(state.path,{replace:true,mode:state.mode});hint.textContent='↓ Обновить';}
+  state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);const hint=$('#gesture-hint');if(Math.abs(dx)>Math.abs(dy)){if(dx<0)$('#back').click();else $('#forward').click();hint.textContent=dx<0?'← Назад':'Вперёд →';}else if(dy<0){$('#up').click();hint.textContent='↑ На уровень выше';}else{navigate(state.path,{replace:true,mode:state.mode});hint.textContent='↓ Обновить';}
   hint.classList.remove('hidden');clearTimeout(hint.timer);hint.timer=setTimeout(()=>hint.classList.add('hidden'),900);
  });
  document.addEventListener('contextmenu',e=>{if(state.rockingHandled){e.preventDefault();state.rockingHandled=false;}});
