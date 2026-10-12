@@ -35,8 +35,10 @@ async function toggleSplit(force){
  if(state.split){if(!state.rightPath||state.rightPath.startsWith('tag://'))state.rightPath=state.path.startsWith('tag://')?(state.special[0]?.path||state.path):state.path;await loadRightPane();}
 }
 async function dropFiles(target,copy=false){
- const paths=state.draggedPaths||[];if(!paths.length)return;const result=await window.bento.pasteItems(paths,target,!copy);const ok=result.filter(x=>x.status==='ok').length;
- toast((copy?'РЎРєРѕРїРёСЂРѕРІР°РЅРѕ: ':'РџРµСЂРµРјРµС‰РµРЅРѕ: ')+ok+(result.length!==ok?' В· РѕС€РёР±РѕРє: '+(result.length-ok):''),result.length!==ok);state.draggedPaths=[];await navigate(state.path,{replace:true,mode:state.mode});if(state.split)await loadRightPane();
+ const paths=state.draggedPaths||[];if(!paths.length)return;
+ const result=await window.bento.pasteItems(paths,target,!copy);const ok=result.filter(x=>x.status==='ok').length;const failed=result.filter(x=>x.status!=='ok');
+ toast((copy?'Copied: ':'Moved: ')+ok+(failed.length?' · failed: '+failed.length+' — '+(failed[0].message||failed[0].status):''),failed.length>0);
+ state.draggedPaths=[];await navigate(state.path,{replace:true,mode:state.mode});if(state.split)await loadRightPane();
 }
 function attachDropZone(el,getDestination){
  if(!el)return;
@@ -118,5 +120,6 @@ document.addEventListener('click',e=>{const tag=e.target.closest('[data-tag]');i
 $('#toggle-sidebar')?.addEventListener('click',()=>{const p=JSON.parse(localStorage.getItem('bento-preferences')||'{}');p.hideSidebar=!p.hideSidebar;localStorage.setItem('bento-preferences',JSON.stringify(p));document.body.classList.toggle('sidebar-collapsed',p.hideSidebar);});
 $('#settings-save')?.addEventListener('click',()=>savePreferences());
 $('#settings-cancel')?.addEventListener('click',()=>$('#settings-dialog').close());
+
 
 
