@@ -1,6 +1,10 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, clipboard } = require('electron');
+﻿const { app, BrowserWindow, ipcMain, shell, dialog, clipboard } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const osExec = require('node:child_process');
+const { promisify } = require('node:util');
+const execFile = promisify(osExec.execFile);
+const { pathToFileURL } = require('node:url');
 const os = require('node:os');
 const metadataFile = () => path.join(app.getPath('userData'), 'file-metadata.json');
 async function readMetadata(){try{return JSON.parse(await fs.readFile(metadataFile(),'utf8'));}catch{return {items:{}};}}
@@ -49,7 +53,7 @@ app.whenReady().then(() => {
     ];
   });
   ipcMain.handle('get-tags', async () => { const data=await readMetadata(); const counts={}; for(const tag of data.definitions||[]) counts[tag]=0; for(const tags of Object.values(data.items||{})) for(const tag of tags) counts[tag]=(counts[tag]||0)+1; return Object.entries(counts).map(([name,count])=>({name,count})).sort((a,b)=>a.name.localeCompare(b.name)); });
-  ipcMain.handle('create-tag', async (_e, name) => { const clean=String(name||'').trim().replace(/^#/,''); if(!clean||/[\\/]/.test(clean))throw new Error('Введите корректное название тега.');const data=await readMetadata();data.definitions=[...new Set([...(data.definitions||[]),clean])];await writeMetadata(data);return clean; });
+  ipcMain.handle('create-tag', async (_e, name) => { const clean=String(name||'').trim().replace(/^#/,''); if(!clean||/[\\/]/.test(clean))throw new Error('Р’РІРµРґРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅРѕРµ РЅР°Р·РІР°РЅРёРµ С‚РµРіР°.');const data=await readMetadata();data.definitions=[...new Set([...(data.definitions||[]),clean])];await writeMetadata(data);return clean; });
   ipcMain.handle('set-tags', async (_e, target, tags) => { const data=await readMetadata(); const clean=[...new Set((tags||[]).map(t=>String(t).trim().replace(/^#/,'' )).filter(t=>t&&!/[\\/]/.test(t)))].slice(0,20); if(clean.length)data.items[target]=clean;else delete data.items[target]; await writeMetadata(data); return clean; });
   ipcMain.handle('list-tagged', async (_e, tag) => { const data=await readMetadata(); const result=[]; for(const [target,tags] of Object.entries(data.items||{})){if(!tags.includes(tag))continue;try{const stat=await fs.stat(target);const ext=path.extname(target).toLowerCase();const isDirectory=stat.isDirectory();let kind='file';if(isDirectory)kind='folder';else if(['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp','.ico'].includes(ext))kind='image';else if(['.mp4','.mov','.mkv','.webm','.avi'].includes(ext))kind='video';else if(['.mp3','.wav','.ogg','.flac','.m4a'].includes(ext))kind='audio';else if(['.zip','.7z','.rar','.tar','.gz'].includes(ext))kind='archive';else if(['.js','.ts','.tsx','.jsx','.html','.css','.json','.py','.gd','.cs','.cpp','.h','.md','.yml','.yaml','.toml','.sh','.ps1'].includes(ext))kind='code';result.push({name:path.basename(target),path:target,isDirectory,kind,extension:ext,size:stat.size,modified:stat.mtimeMs,hidden:path.basename(target).startsWith('.'),tags,isSymlink:false});}catch{delete data.items[target];}} await writeMetadata(data);return result.sort((a,b)=>Number(b.isDirectory)-Number(a.isDirectory)||a.name.localeCompare(b.name,undefined,{numeric:true})); });
   ipcMain.handle('list-directory', async (_e, requestedPath) => {
@@ -75,6 +79,21 @@ app.whenReady().then(() => {
     }));
     return { path: target, parent: path.dirname(target) === target ? null : path.dirname(target), items: result.filter(Boolean) };
   });
+  ipcMain.handle('open-archive', async (_e, target) => {
+    const resolved = path.resolve(String(target || ''));
+    if (path.extname(resolved).toLowerCase() !== '.zip') throw new Error('Only ZIP archives are supported.');
+    const stat = await fs.stat(resolved);
+    const crypto = require('node:crypto');
+    const cacheRoot = path.join(app.getPath('temp'), 'bento-explorer-archives', crypto.createHash('sha1').update(resolved + stat.mtimeMs).digest('hex').slice(0,16));
+    await fs.rm(cacheRoot,{recursive:true,force:true});
+    await fs.mkdir(cacheRoot,{recursive:true});
+    const quotePs = value => String(value).replace(/'/g, "''");
+    const ps = "$ProgressPreference='SilentlyContinue'; Expand-Archive -LiteralPath '" + quotePs(resolved) + "' -DestinationPath '" + quotePs(cacheRoot) + "' -Force";
+    try { await execFile('powershell.exe',['-NoProfile','-NonInteractive','-Command',ps],{windowsHide:true,maxBuffer:8*1024*1024}); }
+    catch (e) { await fs.rm(cacheRoot,{recursive:true,force:true}); throw new Error('Unable to open ZIP: '+(e.stderr||e.message).trim()); }
+    return cacheRoot;
+  });
+  ipcMain.handle('file-url', (_e, target) => pathToFileURL(path.resolve(String(target))).href);
   ipcMain.handle('open-path', async (_e, target) => {
     const result = await shell.openPath(target);
     if (result) throw new Error(result);
@@ -100,7 +119,11 @@ app.whenReady().then(() => {
     const data=await readMetadata();const prefix=target.endsWith(path.sep)?target:target+path.sep;for(const [key,tags] of Object.entries(data.items||{})){if(key===target||key.startsWith(prefix)){const mapped=next+key.slice(target.length);data.items[mapped]=tags;delete data.items[key];}}await writeMetadata(data);
     return next;
   });
-  ipcMain.handle('trash', async (_e, target) => shell.trashItem(target));
+  ipcMain.handle('trash', async (_e, target) => {
+    try { await fs.access(target); } catch { throw new Error('File is missing or inaccessible: '+target); }
+    try { await shell.trashItem(target); } catch (e) { throw new Error('Could not move to Recycle Bin: '+e.message); }
+    return true;
+  });
   ipcMain.handle('copy-paths', (_e, targets) => {
     clipboard.writeText((targets || []).join('\n'));
     return true;
@@ -116,8 +139,14 @@ app.whenReady().then(() => {
         continue;
       } catch {}
       try {
-        if (move) await fs.rename(source, dest);
-        else await fs.cp(source, dest, { recursive: true, errorOnExist: true, force: false });
+        if (move) {
+          try { await fs.rename(source, dest); }
+          catch (error) {
+            if (!['EXDEV','EPERM','EACCES'].includes(error.code)) throw error;
+            await fs.cp(source, dest, { recursive: true, errorOnExist: true, force: false });
+            await fs.rm(source, { recursive: true, force: false });
+          }
+        } else await fs.cp(source, dest, { recursive: true, errorOnExist: true, force: false });
         const meta=await readMetadata();const prefix=source.endsWith(path.sep)?source:source+path.sep;for(const [key,tags] of Object.entries(meta.items||{})){if(key===source||key.startsWith(prefix)){const mapped=dest+key.slice(source.length);if(move)delete meta.items[key];meta.items[mapped]=tags;}}await writeMetadata(meta);
         results.push({ source, status: 'ok', destination: dest });
       } catch (error) { results.push({ source, status: 'error', message: error.message }); }
@@ -132,3 +161,4 @@ app.whenReady().then(() => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+
