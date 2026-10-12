@@ -76,7 +76,7 @@ function setupGestures(){
  });
  document.addEventListener('mouseup',e=>{
   if(e.button===0)state.leftDown=false;if(e.button!==2)return;state.rightDown=false;const g=state.gesture;state.gesture=null;
-  if(g?.kind==='rock'){state.rockingHandled=true;return;}if(g?.kind!=='right')return;
+  if(g?.kind==='rock'){state.rockingHandled=true;clearTrail();$('#gesture-hint').classList.add('hidden');return;}if(g?.kind!=='right')return;
   const dx=e.clientX-g.x,dy=e.clientY-g.y;
   if(Math.hypot(dx,dy)>=55){state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);if(Math.abs(dx)>Math.abs(dy)){if(dx<0)$('#back').click();else $('#forward').click();}else if(dy<0)$('#up').click();else navigate(state.path,{replace:true,mode:state.mode});}
   const hint=$('#gesture-hint');if(Math.hypot(dx,dy)<55)hint.classList.add('hidden');
