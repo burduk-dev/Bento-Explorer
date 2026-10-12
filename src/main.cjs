@@ -1,7 +1,8 @@
-﻿const { app, BrowserWindow, ipcMain, shell, dialog, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, clipboard } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const osExec = require('node:child_process');
+const { spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 const execFile = promisify(osExec.execFile);
 const { pathToFileURL } = require('node:url');
@@ -53,7 +54,7 @@ app.whenReady().then(() => {
     ];
   });
   ipcMain.handle('get-tags', async () => { const data=await readMetadata(); const counts={}; for(const tag of data.definitions||[]) counts[tag]=0; for(const tags of Object.values(data.items||{})) for(const tag of tags) counts[tag]=(counts[tag]||0)+1; return Object.entries(counts).map(([name,count])=>({name,count})).sort((a,b)=>a.name.localeCompare(b.name)); });
-  ipcMain.handle('create-tag', async (_e, name) => { const clean=String(name||'').trim().replace(/^#/,''); if(!clean||/[\\/]/.test(clean))throw new Error('Р’РІРµРґРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅРѕРµ РЅР°Р·РІР°РЅРёРµ С‚РµРіР°.');const data=await readMetadata();data.definitions=[...new Set([...(data.definitions||[]),clean])];await writeMetadata(data);return clean; });
+  ipcMain.handle('create-tag', async (_e, name) => { const clean=String(name||'').trim().replace(/^#/,''); if(!clean||/[\\/]/.test(clean))throw new Error('Введите корректное название тега.');const data=await readMetadata();data.definitions=[...new Set([...(data.definitions||[]),clean])];await writeMetadata(data);return clean; });
   ipcMain.handle('set-tags', async (_e, target, tags) => { const data=await readMetadata(); const clean=[...new Set((tags||[]).map(t=>String(t).trim().replace(/^#/,'' )).filter(t=>t&&!/[\\/]/.test(t)))].slice(0,20); if(clean.length)data.items[target]=clean;else delete data.items[target]; await writeMetadata(data); return clean; });
   ipcMain.handle('list-tagged', async (_e, tag) => { const data=await readMetadata(); const result=[]; for(const [target,tags] of Object.entries(data.items||{})){if(!tags.includes(tag))continue;try{const stat=await fs.stat(target);const ext=path.extname(target).toLowerCase();const isDirectory=stat.isDirectory();let kind='file';if(isDirectory)kind='folder';else if(['.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp','.ico'].includes(ext))kind='image';else if(['.mp4','.mov','.mkv','.webm','.avi'].includes(ext))kind='video';else if(['.mp3','.wav','.ogg','.flac','.m4a'].includes(ext))kind='audio';else if(['.zip','.7z','.rar','.tar','.gz'].includes(ext))kind='archive';else if(['.js','.ts','.tsx','.jsx','.html','.css','.json','.py','.gd','.cs','.cpp','.h','.md','.yml','.yaml','.toml','.sh','.ps1'].includes(ext))kind='code';result.push({name:path.basename(target),path:target,isDirectory,kind,extension:ext,size:stat.size,modified:stat.mtimeMs,hidden:path.basename(target).startsWith('.'),tags,isSymlink:false});}catch{delete data.items[target];}} await writeMetadata(data);return result.sort((a,b)=>Number(b.isDirectory)-Number(a.isDirectory)||a.name.localeCompare(b.name,undefined,{numeric:true})); });
   ipcMain.handle('list-directory', async (_e, requestedPath) => {
@@ -79,18 +80,53 @@ app.whenReady().then(() => {
     }));
     return { path: target, parent: path.dirname(target) === target ? null : path.dirname(target), items: result.filter(Boolean) };
   });
-  ipcMain.handle('open-archive', async (_e, target) => {
+  ipcMain.handle('open-archive', async (event, target) => {
     const resolved = path.resolve(String(target || ''));
-    if (path.extname(resolved).toLowerCase() !== '.zip') throw new Error('Only ZIP archives are supported.');
+    if (path.extname(resolved).toLowerCase() !== '.zip') throw new Error('Поддерживаются только ZIP-архивы.');
     const stat = await fs.stat(resolved);
     const crypto = require('node:crypto');
-    const cacheRoot = path.join(app.getPath('temp'), 'bento-explorer-archives', crypto.createHash('sha1').update(resolved + stat.mtimeMs).digest('hex').slice(0,16));
-    await fs.rm(cacheRoot,{recursive:true,force:true});
-    await fs.mkdir(cacheRoot,{recursive:true});
+    const hash = crypto.createHash('sha1').update(resolved + stat.mtimeMs).digest('hex').slice(0,16);
+    const roots = [
+      path.join(path.dirname(app.getPath('exe')), 'Bento-Explorer-Archives', hash),
+      path.join(path.parse(resolved).root, 'Bento-Explorer-Archives', hash),
+      path.join(app.getPath('temp'), 'Bento-Explorer-Archives', hash)
+    ];
+    let cacheRoot = roots[0], ready = false, lastError;
+    for (const root of roots) {
+      try { await fs.mkdir(root, { recursive: true }); cacheRoot = root; ready = true; break; }
+      catch (error) { lastError = error; }
+    }
+    if (!ready) throw new Error('Не удалось создать папку для распаковки: ' + lastError.message);
+    await fs.rm(cacheRoot, { recursive: true, force: true });
+    await fs.mkdir(cacheRoot, { recursive: true });
     const quotePs = value => String(value).replace(/'/g, "''");
-    const ps = "$ProgressPreference='SilentlyContinue'; Expand-Archive -LiteralPath '" + quotePs(resolved) + "' -DestinationPath '" + quotePs(cacheRoot) + "' -Force";
-    try { await execFile('powershell.exe',['-NoProfile','-NonInteractive','-Command',ps],{windowsHide:true,maxBuffer:8*1024*1024}); }
-    catch (e) { await fs.rm(cacheRoot,{recursive:true,force:true}); throw new Error('Unable to open ZIP: '+(e.stderr||e.message).trim()); }
+    const ps = [
+      "Add-Type -AssemblyName System.IO.Compression.FileSystem",
+      "$archivePath='" + quotePs(resolved) + "'",
+      "$destRoot=[IO.Path]::GetFullPath('" + quotePs(cacheRoot) + "').TrimEnd([IO.Path]::DirectorySeparatorChar)+[IO.Path]::DirectorySeparatorChar",
+      "$zip=[IO.Compression.ZipFile]::OpenRead($archivePath)",
+      "try { $entries=$zip.Entries; $total=[Math]::Max(1,$entries.Count); $i=0; foreach($entry in $entries) { $i++; $relative=$entry.FullName.Replace('/','\'); if([IO.Path]::IsPathRooted($relative) -or ($relative.Split([IO.Path]::DirectorySeparatorChar) -contains '..')) { throw 'Архив содержит небезопасный путь.' }; $out=[IO.Path]::GetFullPath([IO.Path]::Combine($destRoot,$relative)); if(-not $out.StartsWith($destRoot,[StringComparison]::OrdinalIgnoreCase)) { throw 'Недопустимый путь внутри архива.' }; if($entry.FullName.EndsWith('/')) { [IO.Directory]::CreateDirectory($out) | Out-Null } else { [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($out)) | Out-Null; [IO.Compression.ZipFileExtensions]::ExtractToFile($entry,$out,$true) }; Write-Output ('BENTO_PROGRESS:'+$i+':'+$total) } } finally { $zip.Dispose() }"
+    ].join('; ');
+    const encoded = Buffer.from(ps, 'utf16le').toString('base64');
+    event.sender.send('archive-progress', { target: resolved, progress: 0, phase: 'extracting' });
+    await new Promise((resolve, reject) => {
+      const child = spawn('powershell.exe', ['-NoProfile','-NonInteractive','-EncodedCommand',encoded], { windowsHide: true });
+      let stderr = '', pending = '';
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', chunk => {
+        pending += chunk;
+        const lines = pending.split(/\r?\n/); pending = lines.pop() || '';
+        for (const line of lines) {
+          const match = line.match(/BENTO_PROGRESS:(\d+):(\d+)/);
+          if (match) event.sender.send('archive-progress', { target: resolved, progress: Math.min(100, Math.round(Number(match[1]) / Number(match[2]) * 100)), phase: 'extracting' });
+        }
+      });
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', chunk => { stderr += chunk; });
+      child.on('error', reject);
+      child.on('close', code => code === 0 ? resolve() : reject(new Error((stderr || 'PowerShell завершился с кодом ' + code).trim())));
+    }).catch(async error => { await fs.rm(cacheRoot, { recursive: true, force: true }); throw new Error('Не удалось распаковать ZIP: ' + error.message); });
+    event.sender.send('archive-progress', { target: resolved, progress: 100, phase: 'done' });
     return cacheRoot;
   });
   ipcMain.handle('file-url', (_e, target) => pathToFileURL(path.resolve(String(target))).href);
