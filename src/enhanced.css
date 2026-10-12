@@ -29,3 +29,9 @@
 .file-row{margin:3px 0;border-bottom-color:transparent}
 .file-row.is-selected{border-bottom-color:transparent}
 .statusbar.has-selection{display:flex}
+
+/* Custom cursor states + semantic folder/file pointer. */
+.file-card[draggable="true"], .file-row[draggable="true"] { cursor: pointer; }
+.file-card[draggable="true"]:active, .file-row[draggable="true"]:active { cursor: grabbing; }
+.file-card .file-name, .file-row .file-name, .file-card .file-type, .file-row .file-type { cursor: inherit; }
+#bento-cursor { color: #8da9e8; }
