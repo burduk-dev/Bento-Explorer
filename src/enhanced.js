@@ -1,34 +1,34 @@
-
+﻿
 /* Enhanced navigation: tabs, tag views, split pane, mouse gestures and drag/drop. */
 function persistTabs(){localStorage.setItem('bento-tabs',JSON.stringify(state.tabs));}
 function renderTabs(){
  const host=$('#tabs');if(!host)return;
- host.innerHTML=state.tabs.map(t=>'<div class="tab '+(t.id===state.activeTabId?'active':'')+'" data-tab="'+t.id+'" title="'+esc(t.path)+'"><span class="tab-icon">'+icon(t.mode==='tag'?'tag':t.mode==='home'?'home':'folder')+'</span><span class="tab-label">'+esc(t.label||'Новая вкладка')+'</span><button class="tab-close" data-close-tab="'+t.id+'" title="Закрыть вкладку">×</button></div>').join('');
+ host.innerHTML=state.tabs.map(t=>'<div class="tab '+(t.id===state.activeTabId?'active':'')+'" data-tab="'+t.id+'" title="'+esc(t.path)+'"><span class="tab-icon">'+icon(t.mode==='tag'?'tag':t.mode==='home'?'home':'folder')+'</span><span class="tab-label">'+esc(t.label||'РќРѕРІР°СЏ РІРєР»Р°РґРєР°')+'</span><button class="tab-close" data-close-tab="'+t.id+'" title="Р—Р°РєСЂС‹С‚СЊ РІРєР»Р°РґРєСѓ">Г—</button></div>').join('');
 }
 function createTab(path=state.path,mode=state.mode,activate=true){
  const id=state.nextTabId++;const safeMode=mode==='tag'?'tag':mode==='home'?'home':'folder';
  const target=safeMode==='tag'?'tag://'+encodeURIComponent(state.currentTag):(path||state.path||'');
- state.tabs.push({id,path:target,mode:safeMode,label:safeMode==='tag'?'# '+state.currentTag:safeMode==='home'?'Главная':basename(target)});persistTabs();if(activate){state.activeTabId=id;renderTabs();navigate(target||state.path,{replace:true,mode:safeMode,tabSwitch:true});}else renderTabs();
+ state.tabs.push({id,path:target,mode:safeMode,label:safeMode==='tag'?'# '+state.currentTag:safeMode==='home'?'Р“Р»Р°РІРЅР°СЏ':basename(target)});persistTabs();if(activate){state.activeTabId=id;renderTabs();navigate(target||state.path,{replace:true,mode:safeMode,tabSwitch:true});}else renderTabs();
 }
 function safeTabPath(){return state.path&&!state.path.startsWith('tag://')?state.path:state.special.find(s=>s.name==='Desktop')?.path||state.path;}
 function closeTab(id){
- if(state.tabs.length===1){state.tabs[0].path=safeTabPath();state.tabs[0].mode='home';state.tabs[0].label='Главная';state.activeTabId=state.tabs[0].id;persistTabs();renderTabs();navigate(state.tabs[0].path,{replace:true,mode:'home'});return;}
+ if(state.tabs.length===1){state.tabs[0].path=safeTabPath();state.tabs[0].mode='home';state.tabs[0].label='Р“Р»Р°РІРЅР°СЏ';state.activeTabId=state.tabs[0].id;persistTabs();renderTabs();navigate(state.tabs[0].path,{replace:true,mode:'home'});return;}
  const idx=state.tabs.findIndex(t=>t.id===id);if(idx<0)return;state.tabs.splice(idx,1);
  if(state.activeTabId===id){const next=state.tabs[Math.max(0,idx-1)];state.activeTabId=next.id;persistTabs();renderTabs();navigate(next.path,{replace:true,mode:next.mode,tabSwitch:true});}else{persistTabs();renderTabs();}
 }
 async function refreshTagList(){
  state.tags=await window.bento.getTags();
- const host=$('#tag-stack');if(host)host.innerHTML=state.tags.length?state.tags.map(t=>'<button class="nav-item compact tag-item" data-tag="'+esc(t.name)+'" title="'+t.count+' элементов">'+icon('tag','nav-icon')+'<span>'+esc(t.name)+'</span><span class="tag-count">'+t.count+'</span></button>').join(''):'<div class="empty-favorites">Назначьте тег через меню файла</div>';
+ const host=$('#tag-stack');if(host)host.innerHTML=state.tags.length?state.tags.map(t=>'<button class="nav-item compact tag-item" data-tag="'+esc(t.name)+'" title="'+t.count+' СЌР»РµРјРµРЅС‚РѕРІ">'+icon('tag','nav-icon')+'<span>'+esc(t.name)+'</span><span class="tag-count">'+t.count+'</span></button>').join(''):'<div class="empty-favorites">РќР°Р·РЅР°С‡СЊС‚Рµ С‚РµРі С‡РµСЂРµР· РјРµРЅСЋ С„Р°Р№Р»Р°</div>';
 }
 async function loadRightPane(path=state.rightPath||state.path){
- try{const result=await window.bento.listDirectory(path);state.rightPath=result.path;state.rightParent=result.parent;state.rightItems=result.items;state.rightSelected.clear();renderRightPane();}catch(e){toast('Правая панель: '+e.message,true);}
+ try{const result=await window.bento.listDirectory(path);state.rightPath=result.path;state.rightParent=result.parent;state.rightItems=result.items;state.rightSelected.clear();renderRightPane();}catch(e){toast('РџСЂР°РІР°СЏ РїР°РЅРµР»СЊ: '+e.message,true);}
 }
 function renderRightPane(){
  const host=$('#file-area-right');if(!host)return;host.className='file-area '+(state.view==='grid'?'grid-view':'list-view');const items=state.rightItems||[];
- $('#right-address').value=state.rightPath||'';$('#right-status').textContent=items.length+' элементов'+(state.rightSelected.size?' · '+state.rightSelected.size+' выбрано':'');
- if(!items.length){host.innerHTML='<div class="empty-state"><div class="empty-art">'+icon('folder-open')+'</div><h3>Пустая папка</h3><p>Перетащи сюда файлы или выбери другой путь.</p></div>';return;}
- if(state.view==='list')host.innerHTML='<div class="list-header"><span>Имя</span><span>Изменён</span><span>Размер</span><span></span></div>'+items.map(i=>'<div class="file-row '+(state.rightSelected.has(i.path)?'is-selected':'')+'" data-right-item="'+esc(i.path)+'" draggable="true" tabindex="0"><div class="row-name"><span class="file-type '+colorFor(i)+'">'+icon(iconFor(i))+'</span><span class="file-name">'+esc(i.name)+'</span></div><span class="file-date">'+formatDate(i.modified)+'</span><span class="file-size">'+(i.isDirectory?'—':formatSize(i.size))+'</span></div>').join('');
- else host.innerHTML=items.map(i=>'<article class="file-card '+(state.rightSelected.has(i.path)?'is-selected':'')+'" data-right-item="'+esc(i.path)+'" draggable="true" tabindex="0"><div class="card-top"><span class="file-type '+colorFor(i)+'">'+icon(iconFor(i))+'</span></div><div class="file-name" title="'+esc(i.name)+'">'+esc(i.name)+'</div><div class="file-meta"><span>'+(i.isDirectory?'Папка':esc((i.extension||'Файл').replace('.','').toUpperCase()))+'</span><span>'+(i.isDirectory?'':formatSize(i.size))+'</span></div><div class="card-footer"><span>'+formatDate(i.modified)+'</span></div>'+(i.tags?.length?'<div class="tag-chips">'+i.tags.map(t=>'<span class="tag-chip">#'+esc(t)+'</span>').join('')+'</div>':'')+'</article>').join('');
+ $('#right-address').value=state.rightPath||'';$('#right-status').textContent=items.length+' СЌР»РµРјРµРЅС‚РѕРІ'+(state.rightSelected.size?' В· '+state.rightSelected.size+' РІС‹Р±СЂР°РЅРѕ':'');
+ if(!items.length){host.innerHTML='<div class="empty-state"><div class="empty-art">'+icon('folder-open')+'</div><h3>РџСѓСЃС‚Р°СЏ РїР°РїРєР°</h3><p>РџРµСЂРµС‚Р°С‰Рё СЃСЋРґР° С„Р°Р№Р»С‹ РёР»Рё РІС‹Р±РµСЂРё РґСЂСѓРіРѕР№ РїСѓС‚СЊ.</p></div>';return;}
+ if(state.view==='list')host.innerHTML='<div class="list-header"><span>РРјСЏ</span><span>РР·РјРµРЅС‘РЅ</span><span>Р Р°Р·РјРµСЂ</span><span></span></div>'+items.map(i=>'<div class="file-row '+(state.rightSelected.has(i.path)?'is-selected':'')+'" data-right-item="'+esc(i.path)+'" draggable="true" tabindex="0"><div class="row-name"><span class="file-type '+colorFor(i)+'">'+icon(iconFor(i))+'</span><span class="file-name">'+esc(i.name)+'</span></div><span class="file-date">'+formatDate(i.modified)+'</span><span class="file-size">'+(i.isDirectory?'вЂ”':formatSize(i.size))+'</span></div>').join('');
+ else host.innerHTML=items.map(i=>'<article class="file-card '+(state.rightSelected.has(i.path)?'is-selected':'')+'" data-right-item="'+esc(i.path)+'" draggable="true" tabindex="0"><div class="card-top"><span class="file-type '+colorFor(i)+'">'+icon(iconFor(i))+'</span></div><div class="file-name" title="'+esc(i.name)+'">'+esc(i.name)+'</div><div class="file-meta"><span>'+(i.isDirectory?'РџР°РїРєР°':esc((i.extension||'Р¤Р°Р№Р»').replace('.','').toUpperCase()))+'</span><span>'+(i.isDirectory?'':formatSize(i.size))+'</span></div><div class="card-footer"><span>'+formatDate(i.modified)+'</span></div>'+(i.tags?.length?'<div class="tag-chips">'+i.tags.map(t=>'<span class="tag-chip">#'+esc(t)+'</span>').join('')+'</div>':'')+'</article>').join('');
 }
 async function toggleSplit(force){
  state.split=typeof force==='boolean'?force:!state.split;$('#right-pane').classList.toggle('hidden',!state.split);$('#panes').classList.toggle('split',state.split);$('#split-toggle').classList.toggle('view-toggle-selected',state.split);
@@ -36,13 +36,13 @@ async function toggleSplit(force){
 }
 async function dropFiles(target,copy=false){
  const paths=state.draggedPaths||[];if(!paths.length)return;const result=await window.bento.pasteItems(paths,target,!copy);const ok=result.filter(x=>x.status==='ok').length;
- toast((copy?'Скопировано: ':'Перемещено: ')+ok+(result.length!==ok?' · ошибок: '+(result.length-ok):''),result.length!==ok);state.draggedPaths=[];await navigate(state.path,{replace:true,mode:state.mode});if(state.split)await loadRightPane();
+ toast((copy?'РЎРєРѕРїРёСЂРѕРІР°РЅРѕ: ':'РџРµСЂРµРјРµС‰РµРЅРѕ: ')+ok+(result.length!==ok?' В· РѕС€РёР±РѕРє: '+(result.length-ok):''),result.length!==ok);state.draggedPaths=[];await navigate(state.path,{replace:true,mode:state.mode});if(state.split)await loadRightPane();
 }
 function attachDropZone(el,getDestination){
  if(!el)return;
- el.addEventListener('dragover',e=>{if(state.draggedPaths.length||e.dataTransfer?.types.includes('application/x-bento-paths')){e.preventDefault();e.dataTransfer.dropEffect=e.ctrlKey?'copy':'move';el.classList.add('drop-target');}});
+ el.addEventListener('dragover',e=>{if(e.dataTransfer?.types.includes('Files')&&!e.dataTransfer?.types.includes('application/x-bento-paths'))state.draggedPaths=[];if(state.draggedPaths.length||e.dataTransfer?.types.includes('application/x-bento-paths')||e.dataTransfer?.types.includes('Files')){e.preventDefault();e.dataTransfer.dropEffect=e.ctrlKey?'copy':'move';el.classList.add('drop-target');}});
  el.addEventListener('dragleave',e=>{if(!el.contains(e.relatedTarget))el.classList.remove('drop-target');});
- el.addEventListener('drop',async e=>{e.preventDefault();el.classList.remove('drop-target');const target=getDestination(e);if(!target)return;let paths=state.draggedPaths.length?state.draggedPaths:JSON.parse(e.dataTransfer.getData('application/x-bento-paths')||'[]');let external=false;if(!paths.length&&e.dataTransfer.files?.length){paths=Array.from(e.dataTransfer.files).map(file=>{try{return window.bento.getDroppedPath(file);}catch{return '';}}).filter(Boolean);external=paths.length>0;}if(!paths.length)return;state.draggedPaths=paths;await dropFiles(target,external||e.ctrlKey);});
+ el.addEventListener('drop',async e=>{e.preventDefault();el.classList.remove('drop-target');const target=getDestination(e);if(!target)return;let paths=state.draggedPaths.length?state.draggedPaths:JSON.parse(e.dataTransfer.getData('application/x-bento-paths')||'[]');let external=false;if(!paths.length&&e.dataTransfer.files?.length){paths=Array.from(e.dataTransfer.files).map(file=>{try{return window.bento.getDroppedPath(file);}catch{return '';}}).filter(Boolean);external=paths.length>0;}if(!paths.length){toast('Could not get paths from the dragged files.',true);return;}state.draggedPaths=paths;await dropFiles(target,external||e.ctrlKey);});
 }
 function setupDragDrop(){
  const left=$('#file-area'),right=$('#file-area-right');
@@ -71,7 +71,7 @@ function setupGestures(){
   const g=state.gesture;if(!state.rightDown||g?.kind!=='right')return;
   const p=points[points.length-1];if(!p||Math.hypot(e.clientX-p.x,e.clientY-p.y)>=4){points.push({x:e.clientX,y:e.clientY});showTrail();}
   const dx=e.clientX-g.x,dy=e.clientY-g.y;const hint=$('#gesture-hint');
-  hint.textContent=Math.hypot(dx,dy)<20?'Рисуй жест…':Math.abs(dx)>Math.abs(dy)?(dx<0?'← Назад':'Вперёд →'):(dy<0?'↑ На уровень выше':'↓ Обновить');
+  hint.textContent=Math.hypot(dx,dy)<20?'Р РёСЃСѓР№ Р¶РµСЃС‚вЂ¦':Math.abs(dx)>Math.abs(dy)?(dx<0?'в†ђ РќР°Р·Р°Рґ':'Р’РїРµСЂС‘Рґ в†’'):(dy<0?'в†‘ РќР° СѓСЂРѕРІРµРЅСЊ РІС‹С€Рµ':'в†“ РћР±РЅРѕРІРёС‚СЊ');
   hint.classList.remove('hidden');drawTrail();
  });
  document.addEventListener('mouseup',e=>{
@@ -102,12 +102,21 @@ $('#right-go')?.addEventListener('click',()=>loadRightPane($('#right-address').v
 $('#right-address')?.addEventListener('keydown',e=>{if(e.key==='Enter')loadRightPane($('#right-address').value.trim());if(e.key==='Escape')$('#right-address').value=state.rightPath;});
 $('#right-up')?.addEventListener('click',()=>state.rightParent&&loadRightPane(state.rightParent));
 state.rightLastClick=null;
-$('#file-area-right')?.addEventListener('click',e=>{const card=e.target.closest('[data-right-item]');if(!card)return;const item=state.rightItems.find(i=>i.path===card.dataset.rightItem);if(!item)return;const now=Date.now();if(state.rightLastClick&&state.rightLastClick.path===item.path&&now-state.rightLastClick.time<420){state.rightLastClick=null;if(item.isDirectory)loadRightPane(item.path);else window.bento.openPath(item.path);return;}state.rightLastClick={path:item.path,time:now};if(!e.ctrlKey&&!e.metaKey)state.rightSelected.clear();if(state.rightSelected.has(item.path))state.rightSelected.delete(item.path);else state.rightSelected.add(item.path);$('#file-area-right').querySelectorAll('[data-right-item]').forEach(el=>el.classList.toggle('is-selected',state.rightSelected.has(el.dataset.rightItem)));$('#right-status').textContent=state.rightItems.length+' элементов · '+state.rightSelected.size+' выбрано';});
+$('#file-area-right')?.addEventListener('click',e=>{const card=e.target.closest('[data-right-item]');if(!card)return;const item=state.rightItems.find(i=>i.path===card.dataset.rightItem);if(!item)return;const now=Date.now();if(state.rightLastClick&&state.rightLastClick.path===item.path&&now-state.rightLastClick.time<420){state.rightLastClick=null;if(item.isDirectory)loadRightPane(item.path);else window.bento.openPath(item.path);return;}state.rightLastClick={path:item.path,time:now};if(!e.ctrlKey&&!e.metaKey)state.rightSelected.clear();if(state.rightSelected.has(item.path))state.rightSelected.delete(item.path);else state.rightSelected.add(item.path);$('#file-area-right').querySelectorAll('[data-right-item]').forEach(el=>el.classList.toggle('is-selected',state.rightSelected.has(el.dataset.rightItem)));$('#right-status').textContent=state.rightItems.length+' СЌР»РµРјРµРЅС‚РѕРІ В· '+state.rightSelected.size+' РІС‹Р±СЂР°РЅРѕ';});
 
 $('#file-area-right')?.addEventListener('contextmenu',e=>{const card=e.target.closest('[data-right-item]');if(!card)return;e.preventDefault();const item=state.rightItems.find(i=>i.path===card.dataset.rightItem);if(item)showContext(item,e.clientX,e.clientY);});
-$('#add-tag')?.addEventListener('click',async()=>{const name=prompt('Название нового тега.');if(!name)return;try{await window.bento.createTag(name);await refreshTagList();toast('Тег создан: #'+name.trim().replace(/^#/,'').trim());}catch(err){toast(err.message,true);}});
-document.addEventListener('click',e=>{const tag=e.target.closest('[data-tag]');if(tag){navigate('tag://'+encodeURIComponent(tag.dataset.tag),{mode:'tag'});return;}if(e.target.closest('[data-tag-breadcrumb]'))toast('Выбери тег в боковой панели.');});
+$('#add-tag')?.addEventListener('click',async()=>{const name=prompt('РќР°Р·РІР°РЅРёРµ РЅРѕРІРѕРіРѕ С‚РµРіР°.');if(!name)return;try{await window.bento.createTag(name);await refreshTagList();toast('РўРµРі СЃРѕР·РґР°РЅ: #'+name.trim().replace(/^#/,'').trim());}catch(err){toast(err.message,true);}});
+document.addEventListener('click',e=>{const tag=e.target.closest('[data-tag]');if(tag){navigate('tag://'+encodeURIComponent(tag.dataset.tag),{mode:'tag'});return;}if(e.target.closest('[data-tag-breadcrumb]'))toast('Р’С‹Р±РµСЂРё С‚РµРі РІ Р±РѕРєРѕРІРѕР№ РїР°РЅРµР»Рё.');});
 (async()=>{
- if(!state.tabs.length)state.tabs=[{id:state.nextTabId++,path:'',mode:'home',label:'Главная'}];
+ if(!state.tabs.length)state.tabs=[{id:state.nextTabId++,path:'',mode:'home',label:'Р“Р»Р°РІРЅР°СЏ'}];
  state.nextTabId=Math.max(1,...state.tabs.map(t=>Number(t.id)||0))+1;state.activeTabId=state.tabs[0].id;renderTabs();await refreshTagList();setupDragDrop();setupGestures();
 })();
+
+
+
+
+$('#toggle-sidebar')?.addEventListener('click',()=>{const p=JSON.parse(localStorage.getItem('bento-preferences')||'{}');p.hideSidebar=!p.hideSidebar;localStorage.setItem('bento-preferences',JSON.stringify(p));document.body.classList.toggle('sidebar-collapsed',p.hideSidebar);});
+$('#settings-save')?.addEventListener('click',()=>savePreferences());
+$('#settings-cancel')?.addEventListener('click',()=>$('#settings-dialog').close());
+
+
