@@ -88,7 +88,7 @@ app.whenReady().then(() => {
     const hash = crypto.createHash('sha1').update(resolved + stat.mtimeMs).digest('hex').slice(0,16);
     const roots = [
       path.join(path.dirname(app.getPath('exe')), 'Bento-Explorer-Archives', hash),
-      path.join(path.parse(resolved).root, 'Bento-Explorer-Archives', hash),
+      path.join(path.parse(app.getPath('exe')).root, 'Bento-Explorer-Archives', hash),
       path.join(app.getPath('temp'), 'Bento-Explorer-Archives', hash)
     ];
     let cacheRoot = roots[0], ready = false, lastError;
