@@ -156,6 +156,21 @@ app.whenReady().then(() => {
     return cacheRoot;
   });
   ipcMain.handle('file-url', (_e, target) => pathToFileURL(path.resolve(String(target))).href);
+  ipcMain.handle('open-with', async (_e, target) => {
+    if (process.platform !== 'win32') throw new Error('Открытие через системный диалог доступно только в Windows.');
+    const child = spawn('rundll32.exe', ['shell32.dll,OpenAs_RunDLL', path.resolve(String(target || ''))], { detached: true, stdio: 'ignore', windowsHide: false });
+    child.unref();
+    return true;
+  });
+  ipcMain.handle('create-shortcut', async (_e, target) => {
+    const source = path.resolve(String(target || ''));
+    const shortcut = path.join(path.dirname(source), path.basename(source) + ' - Shortcut.lnk');
+    try { await fs.access(shortcut); throw new Error('Ярлык уже существует: ' + path.basename(shortcut)); } catch (error) { if (error.message.startsWith('Ярлык уже существует:')) throw error; }
+    const quote = value => String(value).replace(/'/g, "''");
+    const script = "$shell=New-Object -ComObject WScript.Shell; $link=$shell.CreateShortcut('" + quote(shortcut) + "'); $link.TargetPath='" + quote(source) + "'; $link.WorkingDirectory='" + quote(path.dirname(source)) + "'; $link.Save()";
+    await execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true });
+    return shortcut;
+  });
   ipcMain.handle('open-path', async (_e, target) => {
     const result = await shell.openPath(target);
     if (result) throw new Error(result);
