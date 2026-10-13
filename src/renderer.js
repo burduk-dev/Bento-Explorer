@@ -46,7 +46,8 @@ const iconPaths = {
 };
 function icon(name, cls='') { return '<svg class="icon '+cls+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(iconPaths[name]||iconPaths.file)+'</svg>'; }
 $$('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));
-const state = { path:'', parent:null, items:[], view:localStorage.getItem('bento-view')||'grid', sort:'name', reverse:false, query:'', selected:new Set(), history:[], future:[], mode:'home', favorites:JSON.parse(localStorage.getItem('bento-favorites')||'[]'), special:[], drives:[], clipboard:[], clipboardMove:false, recent:JSON.parse(localStorage.getItem('bento-recent')||'[]'), contextItem:null, lastClick:null, tabs:JSON.parse(localStorage.getItem('bento-tabs')||'[]'), activeTabId:0, nextTabId:1, currentTag:'', tags:[], split:false, rightPath:'', rightItems:[], rightSelected:new Set(), rightParent:null, gesture:null, rightDown:false, leftDown:false, lastRock:0, draggedPaths:[] };
+const state = { path:'', parent:null, items:[], view:localStorage.getItem('bento-view')||'list', sort:'name', reverse:false, query:'', selected:new Set(), history:[], future:[], mode:'home', favorites:JSON.parse(localStorage.getItem('bento-favorites')||'[]'), special:[], drives:[], clipboard:[], clipboardMove:false, recent:JSON.parse(localStorage.getItem('bento-recent')||'[]'), contextItem:null, lastClick:null, tabs:JSON.parse(localStorage.getItem('bento-tabs')||'[]'), activeTabId:0, nextTabId:1, currentTag:'', tags:[], split:false, rightPath:'', rightItems:[], rightSelected:new Set(), rightParent:null, gesture:null, rightDown:false, leftDown:false, lastRock:0, draggedPaths:[] };
+if(!localStorage.getItem('bento-compact-migrated')){state.view='list';localStorage.setItem('bento-view','list');localStorage.setItem('bento-compact-migrated','1');}
 const homeCache = new Map();
 const formatSize = n => n < 1024 ? n+' Б' : n < 1048576 ? (n/1024).toFixed(1)+' КБ' : n < 1073741824 ? (n/1048576).toFixed(1)+' МБ' : (n/1073741824).toFixed(2)+' ГБ';
 const formatDate = ms => new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'short',year:'numeric'}).format(new Date(ms));
@@ -124,19 +125,40 @@ function selectItem(path,add=false){if(!add)state.selected.clear();if(state.sele
 function selectedItems(){return state.selected.size?[...state.selected]:[];}
 async function openItem(item){if(!item.isDirectory&&item.extension==='.zip'){const tab=state.tabs?.find(t=>t.id===state.activeTabId);if(tab){tab.loading=true;tab.loadingTarget=item.path;tab.progress=0;renderTabs?.();}try{const extracted=await window.bento.openArchive(item.path);await navigate(extracted);toast('ZIP-архив открыт');}catch(e){toast(e.message,true);}finally{if(tab){tab.loading=false;tab.loadingTarget='';tab.progress=0;renderTabs?.();}}return;}if(item.isDirectory){state.recent.unshift(item.path);state.recent=[...new Set(state.recent)].slice(0,20);localStorage.setItem('bento-recent',JSON.stringify(state.recent));await navigate(item.path);}else{try{await window.bento.openPath(item.path);state.recent.unshift(item.path);state.recent=[...new Set(state.recent)].slice(0,20);localStorage.setItem('bento-recent',JSON.stringify(state.recent));}catch(e){toast(e.message,true);}}}
 function showContext(item,x,y){
- state.contextItem=item;const menu=$('#context-menu');const isFolder=item.isDirectory;
- const actions=[['open','Открыть','external'],['tag','Изменить теги','tag'],['rename','Переименовать','edit'],['copy','Копировать','copy'],['cut','Вырезать','scissors'],['reveal','Показать в папке','folder'],['properties','Свойства','info'],['trash','В корзину','trash']];
- menu.innerHTML=actions.map(([id,label,ic],i)=>'<button role="menuitem" data-action="'+id+'" class="'+(id==='trash'?'danger':'')+'">'+icon(ic)+'<span>'+label+'</span>'+(id==='rename'?'<kbd>F2</kbd>':id==='copy'?'<kbd>Ctrl C</kbd>':id==='trash'?'<kbd>Del</kbd>':'')+'</button>'+(i===0||i===3?'<div class="menu-divider"></div>':'')).join('');
- menu.classList.remove('hidden');const r=menu.getBoundingClientRect();menu.style.left=Math.min(x,innerWidth-r.width-12)+'px';menu.style.top=Math.min(y,innerHeight-r.height-12)+'px';
+ state.contextItem=item||null;const menu=$('#context-menu');const isFolder=!!item?.isDirectory;
+ const actions=item?[
+  ['open','Открыть','external'],
+  ...(isFolder?[['open-tab','Открыть в новой вкладке','plus'],['pin','Закрепить в избранном','folder']]:[]),
+  ...(!isFolder?[['open-with','Открыть с помощью','app']]:[]),
+  ['cut','Вырезать','scissors'],['copy','Копировать','copy'],['copy-path','Копировать как путь','file-text'],['create-shortcut','Создать ярлык','external'],
+  ['paste','Вставить','download'],['tag','Изменить теги','tag'],['reveal','Показать в папке','folder'],
+  ['rename','Переименовать','edit'],['trash','Удалить','trash'],['properties','Свойства','info']
+ ]:[
+  ['paste','Вставить','download'],['select-all','Выделить всё','check'],['refresh','Обновить','refresh-cw'],
+  ['sort','Сортировка','arrow-down-wide-narrow'],['new-folder','Создать папку','folder-plus']
+ ];
+ const enabled=action=>action!=='paste'||state.clipboard.length>0;
+ menu.innerHTML=actions.map(([id,label,ic],i)=>'<button role="menuitem" data-action="'+id+'" '+(enabled(id)?'':'disabled')+' class="'+(id==='trash'?'danger':'')+'">'+icon(ic)+'<span>'+label+'</span>'+(id==='rename'?'<kbd>F2</kbd>':id==='copy'?'<kbd>Ctrl C</kbd>':id==='trash'?'<kbd>Del</kbd>':'')+'</button>'+(i===0||['copy-path','paste','refresh'].includes(id)?'<div class="menu-divider"></div>':'')).join('');
+ menu.classList.remove('hidden');const r=menu.getBoundingClientRect();menu.style.left=Math.max(8,Math.min(x,innerWidth-r.width-12))+'px';menu.style.top=Math.max(8,Math.min(y,innerHeight-r.height-12))+'px';
 }
 function hideContext(){$('#context-menu').classList.add('hidden');}
 async function handleAction(action,item=state.contextItem){
- if(!item)return;hideContext();
+ if(!item&&!['paste','select-all','refresh','sort','new-folder'].includes(action))return;hideContext();
  try{
+ if(action==='select-all'){visibleItems().forEach(i=>state.selected.add(i.path));renderFiles();return;}
+ if(action==='refresh'){return navigate(state.path,{replace:true,mode:state.mode});}
+ if(action==='sort'){sortNext();return;}
+ if(action==='new-folder')return createFolderDialog();
+ if(action==='paste'){if(!state.clipboard.length)return;const result=await window.bento.pasteItems(state.clipboard,state.path,state.clipboardMove);const ok=result.filter(r=>r.status==='ok').length;toast('Готово: '+ok+' · пропущено: '+(result.length-ok),ok!==result.length);if(state.clipboardMove)state.clipboard=[];return navigate(state.path,{replace:true,mode:state.mode});}
  if(action==='open')return openItem(item);
+ if(action==='open-with'){await window.bento.openWith(item.path);return;}
+ if(action==='create-shortcut'){const shortcut=await window.bento.createShortcut(item.path);toast('Ярлык создан: '+basename(shortcut));return navigate(state.path,{replace:true,mode:state.mode});}
+ if(action==='open-tab'){if(item?.isDirectory)return createTab(item.path,'folder',true);return;}
+ if(action==='pin'){if(!item?.isDirectory)return;if(!state.favorites.some(f=>f.path===item.path)){state.favorites.push({name:item.name,path:item.path});renderSidebar();toast('Добавлено в избранное');}else toast('Уже в избранном');return;}
+ if(action==='copy-path'){await window.bento.copyPaths([item.path]);toast('Путь скопирован');return;}
  if(action==='tag'){const current=(item.tags||[]).join(', ');const value=await editTagsDialog(current);if(value===null)return;const tags=value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean);await window.bento.setTags(item.path,tags);toast(tags.length?'Теги сохранены':'Теги удалены');await refreshTagList();if(state.mode==='tag')return navigate('tag://'+encodeURIComponent(state.currentTag),{replace:true,mode:'tag'});return navigate(state.path,{replace:true,mode:state.mode});}
  if(action==='reveal')return window.bento.revealPath(item.path);
- if(action==='copy'||action==='cut'){state.clipboard=[item.path];state.clipboardMove=action==='cut';toast(action==='copy'?'Скопировано':'Готово к перемещению');return;}
+ if(action==='copy'||action==='cut'){state.clipboard=state.selected.has(item.path)?selectedItems():[item.path];state.clipboardMove=action==='cut';toast((action==='copy'?'Скопировано: ':'Выбрано для перемещения: ')+state.clipboard.length);return;}
  if(action==='rename'){const name=await askName('Переименовать','Введите новое имя',item.name,'Сохранить');if(name===null)return;await window.bento.rename(item.path,name);toast('Переименовано');return navigate(state.path,{replace:true,mode:state.mode});}
  if(action==='trash'){const targets=state.selected.has(item.path)?selectedItems():[item.path];const prefs=JSON.parse(localStorage.getItem('bento-preferences')||'{}');if(prefs.confirmDelete!==false&&!confirm('Move '+targets.length+' item(s) to Recycle Bin?'))return;const outcomes=await Promise.allSettled(targets.map(p=>window.bento.trash(p)));const failed=outcomes.filter(x=>x.status==='rejected');state.selected.clear();toast(failed.length?'Moved '+(outcomes.length-failed.length)+', failed '+failed.length+(failed[0]?' — '+failed[0].reason.message:''):'Moved to Recycle Bin: '+outcomes.length,failed.length>0);return navigate(state.path,{replace:true,mode:state.mode});}
  if(action==='properties'){const p=await window.bento.properties(item.path);$('#properties-content').innerHTML='<div class="property-row"><span>Имя</span><strong>'+esc(item.name)+'</strong></div><div class="property-row"><span>Тип</span><strong>'+(p.directory?'Папка':esc(item.extension||'Файл'))+'</strong></div><div class="property-row"><span>Размер</span><strong>'+(p.directory?'—':formatSize(p.size))+'</strong></div><div class="property-row"><span>Изменён</span><strong>'+esc(new Date(p.modified).toLocaleString('ru-RU'))+'</strong></div><div class="property-path">'+esc(p.path)+'</div>';$('#properties-dialog').showModal();}
@@ -200,7 +222,7 @@ document.addEventListener('click',e=>{
  if(!e.target.closest('#context-menu'))hideContext();
 });
 
-document.addEventListener('contextmenu',e=>{if(state.rockingHandled){e.preventDefault();state.rockingHandled=false;return;}const card=e.target.closest('[data-item]');if(card){e.preventDefault();const item=state.items.find(i=>i.path===card.dataset.item)||{path:card.dataset.item,name:basename(card.dataset.item),isDirectory:false,kind:'file',size:0,modified:Date.now()};if(!state.selected.has(item.path))selectItem(item.path);showContext(item,e.clientX,e.clientY);}});
+document.addEventListener('contextmenu',e=>{if(state.rockingHandled){e.preventDefault();state.rockingHandled=false;return;}const card=e.target.closest('[data-item]');if(card){e.preventDefault();const item=state.items.find(i=>i.path===card.dataset.item)||{path:card.dataset.item,name:basename(card.dataset.item),isDirectory:false,kind:'file',size:0,modified:Date.now()};if(!state.selected.has(item.path))selectItem(item.path);showContext(item,e.clientX,e.clientY);return;}if(e.target.closest('#file-area')&&!e.target.closest('[data-item]')){e.preventDefault();showContext(null,e.clientX,e.clientY);}});
 document.addEventListener('keydown',async e=>{
  const mod=e.ctrlKey||e.metaKey;
  if(e.key==='Escape')hideContext();
