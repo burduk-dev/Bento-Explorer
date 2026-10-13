@@ -65,10 +65,10 @@ function setupGestures(){
  const clearTrail=()=>{trail?.classList.remove('visible');points=[];if(trailPath)trailPath.setAttribute('points','');};
  document.addEventListener('mousedown',e=>{
   if(e.button===2){
-   if(state.leftDown){state.gesture={kind:'rock',direction:'forward'};state.rightDown=true;state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);switchTabByOffset(1);e.preventDefault();return;}
+   if(state.leftDown){state.gesture={kind:'rock',direction:'back'};state.rightDown=true;state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);$('#back').click();e.preventDefault();return;}
    state.rightDown=true;state.gesture={kind:'right',x:e.clientX,y:e.clientY};points=[{x:e.clientX,y:e.clientY}];showTrail();
   }
-  if(e.button===0){state.leftDown=true;if(state.rightDown){state.gesture={kind:'rock',direction:'back'};state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);switchTabByOffset(-1);e.preventDefault();}}
+  if(e.button===0){state.leftDown=true;if(state.rightDown){state.gesture={kind:'rock',direction:'forward'};state.rockingHandled=true;setTimeout(()=>state.rockingHandled=false,600);$('#forward').click();e.preventDefault();}}
  });
  document.addEventListener('mousemove',e=>{
   const g=state.gesture;if(!state.rightDown||g?.kind!=='right')return;
