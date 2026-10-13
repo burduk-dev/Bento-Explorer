@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('bento', {
   specialFolders: () => ipcRenderer.invoke('special-folders'),
   listDirectory: p => ipcRenderer.invoke('list-directory', p),
   openPath: p => ipcRenderer.invoke('open-path', p),
+  openWith: p => ipcRenderer.invoke('open-with', p),
+  createShortcut: p => ipcRenderer.invoke('create-shortcut', p),
   openArchive: p => ipcRenderer.invoke('open-archive', p),
   onArchiveProgress: callback => { const listener = (_event, data) => callback(data); ipcRenderer.on('archive-progress', listener); return () => ipcRenderer.removeListener('archive-progress', listener); },
   fileUrl: p => ipcRenderer.invoke('file-url', p),
