@@ -4,6 +4,7 @@ function persistTabs(){localStorage.setItem('bento-tabs',JSON.stringify(state.ta
 function renderTabs(){
  const host=$('#tabs');if(!host)return;
  host.innerHTML=state.tabs.map(t=>'<div class="tab '+(t.id===state.activeTabId?'active':'')+(t.loading?' is-loading':'')+'" data-tab="'+t.id+'" title="'+esc(t.path)+'"><span class="tab-icon">'+icon(t.mode==='tag'?'tag':t.mode==='home'?'home':'folder')+'</span><span class="tab-label">'+esc(t.label||'Новая вкладка')+'</span>'+(t.loading?'<span class="tab-progress"><i style="width:'+Math.max(4,Number(t.progress)||0)+'%"></i></span>':'')+'<button class="tab-close" data-close-tab="'+t.id+'" title="Закрыть вкладку">×</button></div>').join('');
+ if(state.split)host.insertAdjacentHTML('beforeend','<div class="split-tab-pair" title="'+esc(state.rightPath||'Вторая панель')+'"><button class="split-tab '+(state.focusPane!=='right'?'focused':'')+'" data-split-pane="left">'+icon('folder')+'<span>'+esc(basename(state.path)||'Левая панель')+'</span></button><span class="split-link">⇄</span><button class="split-tab '+(state.focusPane==='right'?'focused':'')+'" data-split-pane="right">'+icon('folder')+'<span>'+esc(basename(state.rightPath)||'Правая панель')+'</span></button><button class="tab-close split-close" data-close-split title="Закрыть сдвоенную вкладку">×</button></div>');
 }
 window.bento.onArchiveProgress?.(data=>{const tab=state.tabs.find(t=>t.loading&&t.loadingTarget===data.target);if(!tab)return;tab.progress=data.progress||0;renderTabs();});
 function createTab(path=state.path,mode=state.mode,activate=true){
@@ -22,7 +23,7 @@ async function refreshTagList(){
  const host=$('#tag-stack');if(host)host.innerHTML=state.tags.length?state.tags.map(t=>'<button class="nav-item compact tag-item" data-tag="'+esc(t.name)+'" title="'+t.count+' элементов">'+icon('tag','nav-icon')+'<span>'+esc(t.name)+'</span><span class="tag-count">'+t.count+'</span></button>').join(''):'<div class="empty-favorites">Назначьте тег через меню файла</div>';
 }
 async function loadRightPane(path=state.rightPath||state.path){
- try{const result=await window.bento.listDirectory(path);state.rightPath=result.path;state.rightParent=result.parent;state.rightItems=result.items;state.rightSelected.clear();renderRightPane();}catch(e){toast('Правая панель: '+e.message,true);}
+ try{const result=await window.bento.listDirectory(path);state.rightPath=result.path;state.rightParent=result.parent;state.rightItems=result.items;state.rightSelected.clear();renderRightPane();renderTabs();}catch(e){toast('Правая панель: '+e.message,true);}
 }
 function renderRightPane(){
  const host=$('#file-area-right');if(!host)return;host.className='file-area '+(state.view==='grid'?'grid-view':'list-view');const items=state.rightItems||[];
@@ -32,7 +33,7 @@ function renderRightPane(){
  else host.innerHTML=items.map(i=>'<article class="file-card '+(state.rightSelected.has(i.path)?'is-selected':'')+'" data-right-item="'+esc(i.path)+'" draggable="true" tabindex="0"><div class="card-top"><span class="file-type '+colorFor(i)+'">'+icon(iconFor(i))+'</span></div><div class="file-name" title="'+esc(i.name)+'">'+esc(i.name)+'</div><div class="file-meta"><span>'+(i.isDirectory?'Папка':esc((i.extension||'Файл').replace('.','').toUpperCase()))+'</span><span>'+(i.isDirectory?'':formatSize(i.size))+'</span></div><div class="card-footer"><span>'+formatDate(i.modified)+'</span></div>'+(i.tags?.length?'<div class="tag-chips">'+i.tags.map(t=>'<span class="tag-chip">#'+esc(t)+'</span>').join('')+'</div>':'')+'</article>').join('');
 }
 async function toggleSplit(force){
- state.split=typeof force==='boolean'?force:!state.split;$('#right-pane').classList.toggle('hidden',!state.split);$('#panes').classList.toggle('split',state.split);$('#split-toggle').classList.toggle('view-toggle-selected',state.split);
+ state.split=typeof force==='boolean'?force:!state.split;state.focusPane=state.split?'right':'left';$('#right-pane').classList.toggle('hidden',!state.split);$('#panes').classList.toggle('split',state.split);$('#split-toggle').classList.toggle('view-toggle-selected',state.split);renderTabs();
  if(state.split){if(!state.rightPath||state.rightPath.startsWith('tag://'))state.rightPath=state.path.startsWith('tag://')?(state.special[0]?.path||state.path):state.path;await loadRightPane();}
 }
 async function dropFiles(target,copy=false){
@@ -98,7 +99,7 @@ document.addEventListener('auxclick',e=>{
 $('#new-tab')?.addEventListener('click',()=>createTab());
 $('#tabs')?.addEventListener('click',e=>{
  const close=e.target.closest('[data-close-tab]');if(close){e.stopPropagation();closeTab(Number(close.dataset.closeTab));return;}
- const tab=e.target.closest('[data-tab]');if(!tab)return;const id=Number(tab.dataset.tab);if(id===state.activeTabId)return;const item=state.tabs.find(t=>t.id===id);if(!item)return;state.activeTabId=id;persistTabs();renderTabs();navigate(item.path,{replace:true,mode:item.mode,tabSwitch:true});
+ const closeSplit=e.target.closest('[data-close-split]');if(closeSplit){e.stopPropagation();toggleSplit(false);return;}const splitPane=e.target.closest('[data-split-pane]');if(splitPane){state.focusPane=splitPane.dataset.splitPane;$('#panes').classList.toggle('focus-right',state.focusPane==='right');renderTabs();return;}const tab=e.target.closest('[data-tab]');if(!tab)return;state.focusPane='left';$('#panes').classList.remove('focus-right');const id=Number(tab.dataset.tab);if(id===state.activeTabId){renderTabs();return;}const item=state.tabs.find(t=>t.id===id);if(!item)return;state.activeTabId=id;persistTabs();renderTabs();navigate(item.path,{replace:true,mode:item.mode,tabSwitch:true});
 });
 $('#split-toggle')?.addEventListener('click',()=>toggleSplit());
 $('#right-go')?.addEventListener('click',()=>loadRightPane($('#right-address').value.trim()));
