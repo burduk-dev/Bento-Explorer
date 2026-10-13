@@ -134,7 +134,7 @@ async function handleAction(action,item=state.contextItem){
  if(!item)return;hideContext();
  try{
  if(action==='open')return openItem(item);
- if(action==='tag'){const current=(item.tags||[]).join(', ');const value=prompt('Теги через запятую. Удали все теги, чтобы очистить.\nМожно создавать новые теги прямо здесь.',current);if(value===null)return;const tags=value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean);await window.bento.setTags(item.path,tags);toast(tags.length?'Теги сохранены':'Теги удалены');await refreshTagList();if(state.mode==='tag')return navigate('tag://'+encodeURIComponent(state.currentTag),{replace:true,mode:'tag'});return navigate(state.path,{replace:true,mode:state.mode});}
+ if(action==='tag'){const current=(item.tags||[]).join(', ');const value=await editTagsDialog(current);if(value===null)return;const tags=value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean);await window.bento.setTags(item.path,tags);toast(tags.length?'Теги сохранены':'Теги удалены');await refreshTagList();if(state.mode==='tag')return navigate('tag://'+encodeURIComponent(state.currentTag),{replace:true,mode:'tag'});return navigate(state.path,{replace:true,mode:state.mode});}
  if(action==='reveal')return window.bento.revealPath(item.path);
  if(action==='copy'||action==='cut'){state.clipboard=[item.path];state.clipboardMove=action==='cut';toast(action==='copy'?'Скопировано':'Готово к перемещению');return;}
  if(action==='rename'){const name=await askName('Переименовать','Введите новое имя',item.name,'Сохранить');if(name===null)return;await window.bento.rename(item.path,name);toast('Переименовано');return navigate(state.path,{replace:true,mode:state.mode});}
@@ -150,6 +150,22 @@ function askName(title,copy,value='',confirmLabel='Создать'){
  d.addEventListener('cancel',()=>resolve(null),{once:true});
  });
 }
+
+function editTagsDialog(value=''){
+ return new Promise(resolve=>{
+  const d=$('#name-dialog'), input=$('#name-input'), form=$('#name-form');
+  $('#dialog-title').textContent='Изменить теги';
+  $('#dialog-copy').textContent='Введите теги через запятую. Оставьте поле пустым, чтобы удалить все теги.';
+  $('#confirm-dialog').textContent='Сохранить'; input.required=false; input.placeholder='например: работа, важно, идеи'; input.value=value;
+  d.showModal(); setTimeout(()=>{input.focus();input.select();},30);
+  let settled=false;
+  const done=v=>{if(settled)return;settled=true;d.close();form.removeEventListener('submit',submit);$('#cancel-dialog').removeEventListener('click',cancel);d.removeEventListener('cancel',onCancel);input.required=true;input.placeholder='';$('#dialog-title').textContent='Новая папка';$('#dialog-copy').textContent='Придумайте короткое и понятное название.';$('#confirm-dialog').textContent='Создать';resolve(v);};
+  const submit=e=>{e.preventDefault();done(input.value);};
+  const cancel=()=>done(null), onCancel=()=>done(null);
+  form.addEventListener('submit',submit);$('#cancel-dialog').addEventListener('click',cancel);d.addEventListener('cancel',onCancel);
+ });
+}
+
 async function createFolderDialog(){const name=await askName('Новая папка','Придумайте короткое и понятное название.','','Создать');if(!name)return;try{await window.bento.createFolder(state.path,name);toast('Папка создана');await navigate(state.path,{replace:true,mode:state.mode});}catch(e){toast(e.message,true);}}
 function sortNext(){const options=['name','modified','size'];state.sort=options[(options.indexOf(state.sort)+1)%options.length];state.reverse=false;toast('Сортировка: '+({name:'по имени',modified:'по дате изменения',size:'по размеру'}[state.sort]));renderFiles();}
 $('#back').addEventListener('click',()=>{const p=state.history.pop();if(p){state.future.push(state.path);navigate(p,{replace:true,fromHistory:true});}});
